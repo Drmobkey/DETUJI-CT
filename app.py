@@ -4,6 +4,7 @@ from flask_cors import CORS
 from config import Config
 from routes.auth_routes import auth_bp
 from routes.predict_routes import predict_bp
+from routes.pdf_routes import pdf_bp
 from services.ai_service import load_ai_model
 
 def create_app():
@@ -26,6 +27,7 @@ def create_app():
     # Blueprint
     app.register_blueprint(auth_bp)
     app.register_blueprint(predict_bp)
+    app.register_blueprint(pdf_bp)
     
     return app
 

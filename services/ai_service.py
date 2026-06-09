@@ -69,6 +69,18 @@ def process_upload_validation(file):
             "status_code": 400
         }
         
+    file.seek(0, os.SEEK_END)  # Geser kursor ke ujung akhir file untuk tahu ukurannya
+    file_length = file.tell()  # Ambil posisi ukuran byte terakhir
+    file.seek(0)
+    
+    if file_length > Config.MAX_CONTENT_LENGTH:
+        max_mb = Config.MAX_CONTENT_LENGTH / (1024 * 1024)
+        return {
+            "success": False,
+            "message": f"Ukuran file terlalu besar! Maksimal ukuran yang diizinkan adalah {max_mb} MB.",
+            "status_code": 413 # 413 Payload Too Large
+        }
+        
     # Validasi konten gambar (memastikan citra medis grayscale)
     ext = file.filename.rsplit('.', 1)[1].lower()
     if ext != 'dcm':

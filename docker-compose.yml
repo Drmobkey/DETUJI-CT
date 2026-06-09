@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # 1. LAYANAN BACKEND (Flask + TensorFlow API)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: detuji_backend
+    restart: always
+    ports:
+      - "5004:5004"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/model_storage:/app/model_storage
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - detuji_network
+
+  # 2. LAYANAN FRONTEND (Next.js Dashboard)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile # Nanti akan kita buat saat mengoprek frontend
+    container_name: detuji_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:5004
+    depends_on:
+      - backend
+    networks:
+      - detuji_network
+
+# 3. JARINGAN ISOLASI DOCKER
+networks:
+  detuji_network:
+    driver: bridge

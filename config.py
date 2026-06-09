@@ -10,3 +10,5 @@ class Config:
     UPLOAD_FOLDER = 'uploads'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'dcm'}
     MODEL_PATH = 'model_storage/best_model_mobilenet256try2.h5'
+    
+    MAX_CONTENT_LENGTH = 15 * 1024 * 1024
