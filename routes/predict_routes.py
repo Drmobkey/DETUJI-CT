@@ -1,4 +1,6 @@
 import os
+import uuid
+from datetime import datetime
 from flask import Blueprint, request, jsonify
 from werkzeug.utils import secure_filename
 from config import Config
@@ -27,10 +29,12 @@ def predict():
     if ai_result["success"]:
         return jsonify({
             "status": "success",
-            "message": "File gambar CT Scan berhasil dianalisis",
+            "analysis_id": f"DETUJI-{uuid.uuid4().hex[:8].upper()}",
             "saved_filename": filename,
             "prediction": ai_result["prediction"],
-            "confidence": ai_result["confidence"]
+            "confidence": round(ai_result["confidence"] * 100, 2),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": "File gambar CT Scan berhasil dianalisis",
         }), 200
     else:
         error_response = {
@@ -39,5 +43,5 @@ def predict():
             "saved_filename": filename
         }
         if "confidence" in ai_result:
-            error_response["confidence"] = ai_result["confidence"]
+            error_response["confidence"] = round(ai_result["confidence"] * 100, 2)
         return jsonify(error_response), 400
