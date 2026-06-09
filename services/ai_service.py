@@ -1,8 +1,23 @@
+import os
 import cv2
 import numpy as np
 import pydicom
+import tensorflow as tf
 from PIL import Image
 from config import Config
+
+MODEL = None
+
+def load_ai_model():
+    global MODEL
+    if MODEL is None:
+        if os.path.exists(Config.MODEL_PATH):
+            # Memuat model .keras milik Anda menggunakan TensorFlow
+            MODEL = tf.keras.models.load_model(Config.MODEL_PATH)
+            print(f"--- [SUKSES] Model AI Berhasil Dimuat dari {Config.MODEL_PATH} ---")
+        else:
+            print(f"--- [PERINGATAN] File model tidak ditemukan di {Config.MODEL_PATH} ---")
+    return MODEL
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -55,12 +70,14 @@ def process_upload_validation(file):
         }
         
     # Validasi konten gambar (memastikan citra medis grayscale)
-    if is_not_medical_image(file):
-        return {
-            "success": False,
-            "message": "Gambar tidak valid! Pastikan Anda mengunggah citra CT Scan medis (skala abu-abu/grayscale).",
-            "status_code": 400
-        }
+    ext = file.filename.rsplit('.', 1)[1].lower()
+    if ext != 'dcm':
+        if is_not_medical_image(file):
+            return {
+                "success": False,
+                "message": "File ditolak! Gambar terdeteksi terlalu berwarna dan tidak dikenali sebagai CT Scan/Rontgen medis.",
+                "status_code": 400
+            }
         
     return {"success": True, "status_code": 200}
 
@@ -110,7 +127,47 @@ def preprocess_for_mobilenet(file_path, target_size=(256,256)):
      
      except Exception as e:
          return {"success": False, "message": f"Gagal memproses gambar: {str(e)}",}
-        
-         
-         
+     
+def run_ai_prediction(file_path):
+    model = load_ai_model()
+    if model is None:
+        return {
+            "success": False, 
+            "message": "AI Model belum tersedia!",
+            "status_code": 503
+        }
     
+    try:
+        # 1. Lakukan preprocessing gambar
+        preprocess_res = preprocess_for_mobilenet(file_path)
+        if not preprocess_res["success"]:
+            return {
+                "success": False,
+                "message": preprocess_res["message"]
+            }
+        
+        input_data = preprocess_res["processed_data"]
+        
+        # 2. Prediksi menggunakan model
+        prediction_probs = model.predict(input_data, verbose=0)
+        
+        classes = ['Normal', 'Tumor Ginjal']
+        predicted_class_idx = int(np.argmax(prediction_probs[0]))
+        hasil_diagnosis = classes[predicted_class_idx]
+        
+        confidence_score = float(prediction_probs[0][predicted_class_idx])
+        
+        if confidence_score < 0.70:
+            return {
+                "success": False,
+                "message": "Model AI ragu-ragu. Struktur anatomi gambar tidak dikenali sebagai CT Scan Ginjal yang valid."
+            }
+            
+        return {
+            "success": True,
+            "prediction": hasil_diagnosis,
+            "confidence": confidence_score
+        }
+        
+    except Exception as e:
+        return {"success": False, "message": f"Terjadi eror saat analisis AI: {str(e)}"}
