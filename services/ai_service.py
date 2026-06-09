@@ -1,10 +1,21 @@
-Flask==3.1.2
-flask-cors==6.0.1
-Werkzeug==3.1.3
-tensorflow==2.20.0
-keras==3.12.0
-opencv-python==4.13.0.92
-pillow==12.0.0
-pydicom==3.0.1
-pylibjpeg==2.1.0
-pylibjpeg-libjpeg==2.3.0
+from config import Config
+
+def allowed_file(filename):
+    return '.' in filename and \
+        filename.rsplit('.',1)[1].lower() in Config.ALLOWED_EXTENSIONS
+
+def process_upload_validation(file):
+    if file.filename == '':
+        return{
+            "success": False, 
+            "message": "Nama file tidak boleh kosong!", 
+            "status_code": 400
+        }
+    
+    if not allowed_file(file.filename):
+        return {
+            "success": False, 
+            "message": f"Format file tidak diizinkan! Hanya menerima format: {', '.join(Config.ALLOWED_EXTENSIONS)}", 
+            "status_code": 400
+        }
+    return {"success": True, "status_code": 200}

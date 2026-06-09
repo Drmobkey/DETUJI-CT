@@ -1,10 +1,11 @@
-from config import config
+from config import Config
 
 def check_login_credentials(username,password):
-    if username == config.ADMIN_USERNAME and password == config.ADMIN_PASSWORD:
-        return{
-            "success" : True,
-            "message" : "Login successfully"
+    if username == Config.ADMIN_USERNAME and password == Config.ADMIN_PASSWORD:
+        return {
+            "success": True,
+            "message": "Login sukses! Selamat datang kembali.",
+            "token": "dummy-jwt-token-detuji-2026"
         }
     else:
         return{

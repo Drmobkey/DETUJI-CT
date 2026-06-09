@@ -1,8 +1,11 @@
-# config.py
+import os
+from dotenv import load_dotenv
 
-class config:
-    ADMIN_USERNAME = 'admin'
-    ADMIN_PASSWORD = 'password'
+load_dotenv()
+
+class Config:
+    ADMIN_USERNAME = os.getenv('ADMIN_USERNAME', 'admin')
+    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'password')
 
     UPLOAD_FOLDER = 'uploads'
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'dcm'}
