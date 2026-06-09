@@ -82,7 +82,6 @@ def process_upload_validation(file):
     return {"success": True, "status_code": 200}
 
 def read_image_file(file_path):
-    
     ext = file_path.split('.')[-1].lower()
     
     # Jika filenya adalah format rontgen medis asli (DICOM)
@@ -93,17 +92,47 @@ def read_image_file(file_path):
         # Konversi ke uint8 (skala 0-255) agar bisa diolah oleh OpenCV
         img_array = ((img_array - np.min(img_array)) / (np.max(img_array) - np.min(img_array)) * 255).astype(np.uint8)
         
-        # DICOM biasanya grayscale, kita ubah ke RGB (3 channel) sesuai syarat MobileNet
-        img_rgb = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+        # Deteksi dimensi / channel gambar DICOM secara dinamis
+        if len(img_array.shape) == 2:
+            # Jika 2 dimensi (Grayscale 1 channel), konversi ke RGB 3 channel
+            img_rgb = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+        elif len(img_array.shape) == 3:
+            if img_array.shape[2] == 1:
+                # Jika 3 dimensi tapi channel-nya cuma 1
+                img_rgb = cv2.cvtColor(img_array[:, :, 0], cv2.COLOR_GRAY2RGB)
+            elif img_array.shape[2] == 3:
+                # Jika sudah 3 channel, gunakan langsung
+                img_rgb = img_array
+            elif img_array.shape[2] == 4:
+                # Jika RGBA (4 channel), buang alpha channel-nya ke RGB
+                img_rgb = cv2.cvtColor(img_array, cv2.COLOR_RGBA2RGB)
+            else:
+                img_rgb = img_array
+        else:
+            img_rgb = img_array
+            
         return img_rgb
     
     # Jika filenya adalah gambar standar (PNG/JPG)
     else:
         # Membaca gambar dengan OpenCV (Default: BGR)
         img_bgr = cv2.imread(file_path)
-        
-        # Diubah ke format RGB sesuai fungsi load_image di notebook Anda
-        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+        if img_bgr is None:
+            raise ValueError("Gagal membaca file gambar (file rusak atau tidak didukung)")
+            
+        # Deteksi dimensi / channel gambar standar secara dinamis
+        if len(img_bgr.shape) == 2:
+            img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_GRAY2RGB)
+        elif len(img_bgr.shape) == 3:
+            if img_bgr.shape[2] == 3:
+                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
+            elif img_bgr.shape[2] == 4:
+                img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGRA2RGB)
+            else:
+                img_rgb = img_bgr
+        else:
+            img_rgb = img_bgr
+            
         return img_rgb
     
 def preprocess_for_mobilenet(file_path, target_size=(256,256)):
