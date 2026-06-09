@@ -33,8 +33,11 @@ def predict():
             "confidence": ai_result["confidence"]
         }), 200
     else:
-        return jsonify({
+        error_response = {
             "status": "error",
             "message": ai_result.get("message", "Gagal memproses file gambar CT Scan"),
             "saved_filename": filename
-        }), 400
+        }
+        if "confidence" in ai_result:
+            error_response["confidence"] = ai_result["confidence"]
+        return jsonify(error_response), 400

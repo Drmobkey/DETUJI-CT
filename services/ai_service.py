@@ -189,7 +189,8 @@ def run_ai_prediction(file_path):
         if confidence_score < 0.70:
             return {
                 "success": False,
-                "message": "Model AI ragu-ragu. Struktur anatomi gambar tidak dikenali sebagai CT Scan Ginjal yang valid."
+                "message": "Model AI ragu-ragu. Struktur anatomi gambar tidak dikenali sebagai CT Scan Ginjal yang valid.",
+                "confidence": confidence_score
             }
             
         return {
