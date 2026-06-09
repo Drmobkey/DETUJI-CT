@@ -157,22 +157,21 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     # ==================== LAMPIRAN CITRA CT SCAN (FRAMED CARD) ====================
     story.append(Paragraph("CITRA MEDIS YANG DIANALISIS (CT SCAN)", section_heading))
     try:
-        # Memasang gambar dengan frame abu-abu profesional
-        scan_img = Image(image_path, width=190, height=190)
+        # Menampilkan gambar tunggal asli saja
+        scan_img = Image(image_path, width=200, height=200)
         scan_img.hAlign = 'CENTER'
         
-        # Frame pembungkus gambar
-        image_table = Table([[scan_img]], colWidths=[210], rowHeights=[210])
+        image_table = Table([[scan_img]], colWidths=[220], rowHeights=[220])
         image_table.setStyle(TableStyle([
             ('ALIGN', (0,0), (-1,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')), # Slate 50 background
-            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),      # Slate 200 border
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),
             ('PADDING', (0,0), (-1,-1), 10),
         ]))
         story.append(image_table)
     except Exception as e:
-        story.append(Paragraph(f"<i>[Gagal memuat lampiran citra medis: {str(e)}]</i>", body_style))
+        story.append(Paragraph(f"<i>[Gagal memuat lampiran citra medis: {html.escape(str(e))}]</i>", body_style))
     story.append(Spacer(1, 12))
 
     # ==================== INTERPRETASI & DIAGNOSIS AI (ALERT BOX) ====================

@@ -56,6 +56,8 @@ def predict():
         return jsonify({
             "status": "success",
             "analysis_id": f"DETUJI-{uuid.uuid4().hex[:8].upper()}",
+            "nama_pasien": nama_pasien,
+            "no_rm": no_rm,
             "saved_filename": filename,
             "prediction": ai_result["prediction"],
             "confidence": round(ai_result["confidence"] * 100, 2),
