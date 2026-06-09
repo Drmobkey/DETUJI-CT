@@ -1,4 +1,3 @@
-from pydicom import pydicom
 import cv2
 import numpy as np
 import pydicom
@@ -9,27 +8,32 @@ def allowed_file(filename):
     return '.' in filename and \
         filename.rsplit('.',1)[1].lower() in Config.ALLOWED_EXTENSIONS
 
-def is_not_medical_image(file_stream, threshold= 15.0):
+def is_not_medical_image(file_stream, threshold=15.0):
+    # 1. Cek ekstensi file terlebih dahulu. Jika formatnya .dcm (DICOM),
+    #    maka otomatis dianggap sebagai citra medis.
+    filename = getattr(file_stream, 'filename', '')
+    if filename and filename.rsplit('.', 1)[-1].lower() == 'dcm':
+        return False
 
-    # 1. Baca gambar dari memory stream (karena file belum disimpan)
+    # 2. Baca gambar dari memory stream (karena file belum disimpan)
     file_bytes = np.frombuffer(file_stream.read(), np.uint8)
     img_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
     
-    # 2. Reset posisi pointer file ke awal agar bisa dibaca lagi nanti
+    # 3. Reset posisi pointer file ke awal agar bisa dibaca lagi nanti
     file_stream.seek(0)
     
     if img_bgr is None:
         return True
     
-    # 3. Pecah gambar menjadi 3 channel: Blue, Green, Red
-    b,g,r = cv2.split(img_bgr)
+    # 4. Pecah gambar menjadi 3 channel: Blue, Green, Red
+    b, g, r = cv2.split(img_bgr)
     
-    # 4. Hitung selisih antar channel warna
+    # 5. Hitung selisih antar channel warna
     diff_rg = np.abs(r.astype(np.int16) - g.astype(np.int16))
     diff_rb = np.abs(r.astype(np.int16) - b.astype(np.int16))
     diff_gb = np.abs(g.astype(np.int16) - b.astype(np.int16))
     
-    # 4. Hitung rata-rata deviasi warna gambar
+    # 6. Hitung rata-rata deviasi warna gambar
     mean_diff = (np.mean(diff_rg) + np.mean(diff_rb) + np.mean(diff_gb)) / 3.0
     
     # Jika rata-rata selisih warna di atas threshold, artinya gambar terlalu berwarna
@@ -37,7 +41,7 @@ def is_not_medical_image(file_stream, threshold= 15.0):
 
 def process_upload_validation(file):
     if file.filename == '':
-        return{
+        return {
             "success": False, 
             "message": "Nama file tidak boleh kosong!", 
             "status_code": 400
@@ -49,6 +53,15 @@ def process_upload_validation(file):
             "message": f"Format file tidak diizinkan! Hanya menerima format: {', '.join(Config.ALLOWED_EXTENSIONS)}", 
             "status_code": 400
         }
+        
+    # Validasi konten gambar (memastikan citra medis grayscale)
+    if is_not_medical_image(file):
+        return {
+            "success": False,
+            "message": "Gambar tidak valid! Pastikan Anda mengunggah citra CT Scan medis (skala abu-abu/grayscale).",
+            "status_code": 400
+        }
+        
     return {"success": True, "status_code": 200}
 
 def read_image_file(file_path):
