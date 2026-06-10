@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirement.txt
 COPY . .
 
 # Ekspos port 5001 (sesuai port Flask yang diinginkan di VPS)
-EXPOSE 5001
+EXPOSE 5004
 
 # Jalankan server produksi Gunicorn binding ke port 5001
 CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "2", "--threads", "4", "--timeout", "120", "app:create_app()"]

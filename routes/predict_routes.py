@@ -60,9 +60,9 @@ def predict():
             "no_rm": no_rm,
             "saved_filename": filename,
             "prediction": ai_result["prediction"],
-            "confidence": round(ai_result["confidence"] * 100, 2),
+            "confidence": min(round(ai_result["confidence"] * 100, 2), 99.99),
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "message": "File gambar CT Scan berhasil dianalisis",
+            "message": ai_result.get("message", "File gambar CT Scan berhasil dianalisis"),
         }), 200
     else:
         error_response = {
@@ -71,5 +71,5 @@ def predict():
             "saved_filename": filename
         }
         if "confidence" in ai_result:
-            error_response["confidence"] = round(ai_result["confidence"] * 100, 2)
+            error_response["confidence"] = min(round(ai_result["confidence"] * 100, 2), 99.99)
         return jsonify(error_response), 400

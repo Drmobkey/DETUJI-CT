@@ -37,13 +37,14 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     """
     Fungsi untuk merakit lembar hasil radiologi resmi ke dalam format PDF menggunakan ReportLab.
     """
+    temp_image_path = None
     # Proteksi karakter spesial XML agar tidak merusak parser Paragraph ReportLab
     nama_pasien = html.escape(str(report_data.get('nama_pasien', 'Anonim')))
     no_rm = html.escape(str(report_data.get('no_rm', '-')))
     timestamp = html.escape(str(report_data.get('timestamp', '-')))
     analysis_id = html.escape(str(report_data.get('analysis_id', '-')))
     prediction = html.escape(str(report_data.get('prediction', '-')))
-    confidence = html.escape(str(report_data.get('confidence', '-')))
+    confidence = html.escape(str(report_data.get('confidence', '-'))).replace('.', ',')
 
     # 1. Inisialisasi dokumen berukuran kertas Letter dengan margin proporsional
     doc = SimpleDocTemplate(
@@ -157,8 +158,47 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     # ==================== LAMPIRAN CITRA CT SCAN (FRAMED CARD) ====================
     story.append(Paragraph("CITRA MEDIS YANG DIANALISIS (CT SCAN)", section_heading))
     try:
+        image_path_to_use = image_path
+        if image_path.lower().endswith('.dcm'):
+            try:
+                import pydicom
+                import numpy as np
+                import cv2
+                
+                ds = pydicom.dcmread(image_path)
+                img_array = ds.pixel_array
+                
+                # Konversi ke uint8 skala 0-255
+                img_min = np.min(img_array)
+                img_max = np.max(img_array)
+                if img_max > img_min:
+                    img_array = ((img_array - img_min) / (img_max - img_min) * 255).astype(np.uint8)
+                else:
+                    img_array = np.zeros_like(img_array, dtype=np.uint8)
+                    
+                # Konversi ke BGR untuk cv2.imwrite
+                if len(img_array.shape) == 2:
+                    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+                elif len(img_array.shape) == 3:
+                    if img_array.shape[2] == 1:
+                        img_bgr = cv2.cvtColor(img_array[:, :, 0], cv2.COLOR_GRAY2BGR)
+                    elif img_array.shape[2] == 3:
+                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                    elif img_array.shape[2] == 4:
+                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+                    else:
+                        img_bgr = img_array
+                else:
+                    img_bgr = img_array
+                    
+                temp_image_path = image_path + ".temp.png"
+                cv2.imwrite(temp_image_path, img_bgr)
+                image_path_to_use = temp_image_path
+            except Exception as dcm_err:
+                print(f"Error converting DICOM to PNG for PDF: {dcm_err}")
+                
         # Menampilkan gambar tunggal asli saja
-        scan_img = Image(image_path, width=200, height=200)
+        scan_img = Image(image_path_to_use, width=200, height=200)
         scan_img.hAlign = 'CENTER'
         
         image_table = Table([[scan_img]], colWidths=[220], rowHeights=[220])
@@ -171,7 +211,7 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
         ]))
         story.append(image_table)
     except Exception as e:
-        story.append(Paragraph(f"<i>[Gagal memuat lampiran citra medis: {html.escape(str(e))}]</i>", body_style))
+        story.append(Paragraph(f"<i>[Gagal memproses lampiran citra medis: {html.escape(str(e))}]</i>", body_style))
     story.append(Spacer(1, 12))
 
     # ==================== INTERPRETASI & DIAGNOSIS AI (ALERT BOX) ====================
@@ -240,5 +280,13 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     ]))
     story.append(footer_table)
 
-    # 3. Cetak dokumen menjadi file PDF fisik dengan dekorasi halaman
-    doc.build(story, onFirstPage=draw_page_decorations)
+    try:
+        # 3. Cetak dokumen menjadi file PDF fisik dengan dekorasi halaman
+        doc.build(story, onFirstPage=draw_page_decorations)
+    finally:
+        # Hapus berkas temporary png jika ada
+        if temp_image_path and os.path.exists(temp_image_path):
+            try:
+                os.remove(temp_image_path)
+            except Exception as clean_err:
+                print(f"Error cleaning up temporary PNG: {clean_err}")

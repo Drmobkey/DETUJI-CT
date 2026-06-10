@@ -198,17 +198,14 @@ def run_ai_prediction(file_path):
         
         confidence_score = float(prediction_probs[0][predicted_class_idx])
         
-        if confidence_score < 0.70:
-            return {
-                "success": False,
-                "message": "Model AI ragu-ragu. Struktur anatomi gambar tidak dikenali sebagai CT Scan Ginjal yang valid.",
-                "confidence": confidence_score
-            }
-            
+        is_doubtful = confidence_score < 0.70
+        
         return {
             "success": True,
             "prediction": hasil_diagnosis,
-            "confidence": confidence_score
+            "confidence": confidence_score,
+            "is_doubtful": is_doubtful,
+            "message": "Model AI ragu-ragu. Struktur anatomi gambar tidak dikenali sebagai CT Scan Ginjal yang valid." if is_doubtful else "File gambar CT Scan berhasil dianalisis"
         }
         
     except Exception as e:
