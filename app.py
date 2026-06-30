@@ -20,8 +20,8 @@ def create_app():
     
     
     # Memicu pemuatan model .h5 ke memori RAM saat server dihidupkan
-    with app.app_context():
-        load_ai_model()
+    # with app.app_context():
+    #     load_ai_model()
         
     
     # Blueprint

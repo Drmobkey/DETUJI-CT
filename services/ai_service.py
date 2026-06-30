@@ -6,18 +6,26 @@ import tensorflow as tf
 from PIL import Image
 from config import Config
 
-MODEL = None
+# PAKSA TensorFlow menggunakan CPU saja (SEBELUM inisialisasi apapun)
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+# Nonaktifkan optimasi oneDNN yang sering crash di VPS
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
+from config import Config
+
+# Variabel global untuk menampung model
+_MODEL = None
 
 def load_ai_model():
-    global MODEL
-    if MODEL is None:
+    global _MODEL
+    if _MODEL is None:
         if os.path.exists(Config.MODEL_PATH):
-            # Memuat model .keras milik Anda menggunakan TensorFlow
-            MODEL = tf.keras.models.load_model(Config.MODEL_PATH)
-            print(f"--- [SUKSES] Model AI Berhasil Dimuat dari {Config.MODEL_PATH} ---")
+            print("--- [INFO] Memuat model AI ke RAM (Lazy Loading)... ---")
+            _MODEL = tf.keras.models.load_model(Config.MODEL_PATH, compile=False)
+            print("--- [SUKSES] Model AI Berhasil Dimuat ---")
         else:
-            print(f"--- [PERINGATAN] File model tidak ditemukan di {Config.MODEL_PATH} ---")
-    return MODEL
+            print(f"--- [ERROR] File model tidak ditemukan di {Config.MODEL_PATH} ---")
+    return _MODEL
 
 def allowed_file(filename):
     return '.' in filename and \
