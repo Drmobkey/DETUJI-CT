@@ -33,11 +33,10 @@ def draw_page_decorations(canvas, doc):
     
     canvas.restoreState()
 
-def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
+def generate_diagnosis_pdf(report_data, output_pdf_path):
     """
     Fungsi untuk merakit lembar hasil radiologi resmi ke dalam format PDF menggunakan ReportLab.
     """
-    temp_image_path = None
     # Proteksi karakter spesial XML agar tidak merusak parser Paragraph ReportLab
     nama_pasien = html.escape(str(report_data.get('nama_pasien', 'Anonim')))
     no_rm = html.escape(str(report_data.get('no_rm', '-')))
@@ -45,6 +44,7 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     analysis_id = html.escape(str(report_data.get('analysis_id', '-')))
     prediction = html.escape(str(report_data.get('prediction', '-')))
     confidence = html.escape(str(report_data.get('confidence', '-'))).replace('.', ',')
+    details = report_data.get('details', [])
 
     # 1. Inisialisasi dokumen berukuran kertas Letter dengan margin proporsional
     doc = SimpleDocTemplate(
@@ -58,6 +58,8 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     story = []
     
     # 2. Pengaturan Gaya Tulisan (Styles)
+    from reportlab.platypus import PageBreak
+    from config import Config
     styles = getSampleStyleSheet()
     
     # Custom Styles
@@ -155,69 +157,9 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     story.append(info_table)
     story.append(Spacer(1, 12))
 
-    # ==================== LAMPIRAN CITRA CT SCAN (FRAMED CARD) ====================
-    story.append(Paragraph("CITRA MEDIS YANG DIANALISIS (CT SCAN)", section_heading))
-    try:
-        image_path_to_use = image_path
-        if image_path.lower().endswith('.dcm'):
-            try:
-                import pydicom
-                import numpy as np
-                import cv2
-                
-                ds = pydicom.dcmread(image_path)
-                img_array = ds.pixel_array
-                
-                # Konversi ke uint8 skala 0-255
-                img_min = np.min(img_array)
-                img_max = np.max(img_array)
-                if img_max > img_min:
-                    img_array = ((img_array - img_min) / (img_max - img_min) * 255).astype(np.uint8)
-                else:
-                    img_array = np.zeros_like(img_array, dtype=np.uint8)
-                    
-                # Konversi ke BGR untuk cv2.imwrite
-                if len(img_array.shape) == 2:
-                    img_bgr = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
-                elif len(img_array.shape) == 3:
-                    if img_array.shape[2] == 1:
-                        img_bgr = cv2.cvtColor(img_array[:, :, 0], cv2.COLOR_GRAY2BGR)
-                    elif img_array.shape[2] == 3:
-                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-                    elif img_array.shape[2] == 4:
-                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
-                    else:
-                        img_bgr = img_array
-                else:
-                    img_bgr = img_array
-                    
-                temp_image_path = image_path + ".temp.png"
-                cv2.imwrite(temp_image_path, img_bgr)
-                image_path_to_use = temp_image_path
-            except Exception as dcm_err:
-                print(f"Error converting DICOM to PNG for PDF: {dcm_err}")
-                
-        # Menampilkan gambar tunggal asli saja
-        scan_img = Image(image_path_to_use, width=200, height=200)
-        scan_img.hAlign = 'CENTER'
-        
-        image_table = Table([[scan_img]], colWidths=[220], rowHeights=[220])
-        image_table.setStyle(TableStyle([
-            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
-            ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),
-            ('PADDING', (0,0), (-1,-1), 10),
-        ]))
-        story.append(image_table)
-    except Exception as e:
-        story.append(Paragraph(f"<i>[Gagal memproses lampiran citra medis: {html.escape(str(e))}]</i>", body_style))
-    story.append(Spacer(1, 12))
-
     # ==================== INTERPRETASI & DIAGNOSIS AI (ALERT BOX) ====================
-    story.append(Paragraph("HASIL ANALISIS KECERDASAN BUATAN (AI)", section_heading))
+    story.append(Paragraph("RINGKASAN HASIL ANALISIS (MAYORITAS)", section_heading))
     
-    # Warna tema dinamis (Merah Rose untuk Tumor, Hijau Emerald untuk Normal)
     is_tumor = "tumor" in prediction.lower()
     bg_color = colors.HexColor('#FFF1F2') if is_tumor else colors.HexColor('#ECFDF5')
     text_color = colors.HexColor('#BE123C') if is_tumor else colors.HexColor('#047857')
@@ -241,10 +183,13 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
         textColor=colors.HexColor('#475569') # Slate 600
     )
     
+    summary_text = html.escape(str(report_data.get('summary_text', f"Berdasarkan analisis {len(details)} gambar.")))
+    
     result_box_data = [
-        [Paragraph(f"<b>STATUS DIAGNOSIS: &nbsp;{status_label}</b>", result_title_style)],
-        [Paragraph(f"Tingkat Kepercayaan Sistem (Confidence Score): &nbsp;<b>{confidence}%</b>", result_detail_style)],
-        [Paragraph(f"<i>Klasifikasi dilakukan menggunakan arsitektur deep learning MobileNet v2 yang telah dioptimalkan untuk citra CT Scan Ginjal.</i>", ParagraphStyle('ResultDesc', parent=result_detail_style, fontSize=7.5))]
+        [Paragraph(f"<b>STATUS KESELURUHAN: &nbsp;{status_label}</b>", result_title_style)],
+        [Paragraph(f"Rata-rata Tingkat Kepercayaan: &nbsp;<b>{confidence}%</b>", result_detail_style)],
+        [Paragraph(f"{summary_text}", ParagraphStyle('ResultDesc', parent=result_detail_style, fontSize=9, spaceBefore=4))],
+        [Paragraph(f"<i>Klasifikasi dilakukan menggunakan arsitektur deep learning MobileNet v2 yang telah dioptimalkan untuk citra CT Scan Ginjal.</i>", ParagraphStyle('ResultInfo', parent=result_detail_style, fontSize=7.5, spaceBefore=6))]
     ]
     
     result_table = Table(result_box_data, colWidths=[530])
@@ -256,8 +201,110 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
     ]))
     story.append(result_table)
     story.append(Spacer(1, 20))
+    
+    # Pindah halaman untuk lampiran jika gambar banyak
+    if len(details) > 0:
+        story.append(PageBreak())
+
+    # ==================== LAMPIRAN CITRA CT SCAN ====================
+    story.append(Paragraph("LAMPIRAN CITRA MEDIS YANG DIANALISIS", section_heading))
+    story.append(Spacer(1, 10))
+    
+    temp_files = []
+    
+    for idx, detail in enumerate(details):
+        img_filename = detail.get('saved_filename', '')
+        img_prediction = detail.get('prediction', 'Unknown')
+        img_confidence = detail.get('confidence', 0)
+        
+        image_path = os.path.join(Config.UPLOAD_FOLDER, img_filename)
+        
+        try:
+            image_path_to_use = image_path
+            if image_path.lower().endswith('.dcm'):
+                try:
+                    import pydicom
+                    import numpy as np
+                    import cv2
+                    
+                    ds = pydicom.dcmread(image_path)
+                    img_array = ds.pixel_array
+                    
+                    # Konversi ke uint8 skala 0-255
+                    img_min = np.min(img_array)
+                    img_max = np.max(img_array)
+                    if img_max > img_min:
+                        img_array = ((img_array - img_min) / (img_max - img_min) * 255).astype(np.uint8)
+                    else:
+                        img_array = np.zeros_like(img_array, dtype=np.uint8)
+                        
+                    # Konversi ke BGR untuk cv2.imwrite
+                    if len(img_array.shape) == 2:
+                        img_bgr = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+                    elif len(img_array.shape) == 3:
+                        if img_array.shape[2] == 1:
+                            img_bgr = cv2.cvtColor(img_array[:, :, 0], cv2.COLOR_GRAY2BGR)
+                        elif img_array.shape[2] == 3:
+                            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+                        elif img_array.shape[2] == 4:
+                            img_bgr = cv2.cvtColor(img_array, cv2.COLOR_RGBA2BGR)
+                        else:
+                            img_bgr = img_array
+                    else:
+                        img_bgr = img_array
+                        
+                    temp_image_path = image_path + f".temp_{idx}.png"
+                    cv2.imwrite(temp_image_path, img_bgr)
+                    image_path_to_use = temp_image_path
+                    temp_files.append(temp_image_path)
+                except Exception as dcm_err:
+                    print(f"Error converting DICOM to PNG for PDF: {dcm_err}")
+                    
+            # Menampilkan gambar
+            scan_img = Image(image_path_to_use, width=150, height=150)
+            scan_img.hAlign = 'CENTER'
+            
+            # Label
+            img_is_tumor = "tumor" in img_prediction.lower()
+            lbl_color = colors.HexColor('#BE123C') if img_is_tumor else colors.HexColor('#047857')
+            
+            lbl_style = ParagraphStyle(
+                'ImgLbl',
+                parent=styles['Normal'],
+                fontName='Helvetica-Bold',
+                fontSize=9,
+                textColor=lbl_color,
+                alignment=1 # Center
+            )
+            
+            desc_style = ParagraphStyle(
+                'ImgDesc',
+                parent=styles['Normal'],
+                fontName='Helvetica',
+                fontSize=8,
+                textColor=colors.HexColor('#64748B'),
+                alignment=1
+            )
+            
+            img_label = Paragraph(f"{img_prediction.upper()} ({str(img_confidence).replace('.', ',')}%)", lbl_style)
+            img_desc = Paragraph(f"File: {detail.get('original_filename', img_filename)}", desc_style)
+            
+            image_table = Table([[scan_img], [img_label], [img_desc]], colWidths=[200], rowHeights=[160, 15, 15])
+            image_table.setStyle(TableStyle([
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
+                ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),
+                ('PADDING', (0,0), (-1,-1), 5),
+            ]))
+            story.append(image_table)
+            story.append(Spacer(1, 15))
+        except Exception as e:
+            story.append(Paragraph(f"<i>[Gagal memuat citra {img_filename}: {html.escape(str(e))}]</i>", body_style))
+            story.append(Spacer(1, 10))
 
     # ==================== TANDA TANGAN / DISCLAIMER (FOOTER CARD) ====================
+    story.append(Spacer(1, 10))
     disclaimer_text = (
         "<font size=7 color='#64748B'><b>DISCLAIMER MEDIS:</b><br/>"
         "Laporan analisis ini dihasilkan secara otomatis oleh sistem kecerdasan buatan komputer (Detuji-CT). "
@@ -282,11 +329,12 @@ def generate_diagnosis_pdf(report_data, image_path, output_pdf_path):
 
     try:
         # 3. Cetak dokumen menjadi file PDF fisik dengan dekorasi halaman
-        doc.build(story, onFirstPage=draw_page_decorations)
+        doc.build(story, onFirstPage=draw_page_decorations, onLaterPages=draw_page_decorations)
     finally:
         # Hapus berkas temporary png jika ada
-        if temp_image_path and os.path.exists(temp_image_path):
-            try:
-                os.remove(temp_image_path)
-            except Exception as clean_err:
-                print(f"Error cleaning up temporary PNG: {clean_err}")
+        for tmp in temp_files:
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except Exception as clean_err:
+                    print(f"Error cleaning up temporary PNG {tmp}: {clean_err}")
