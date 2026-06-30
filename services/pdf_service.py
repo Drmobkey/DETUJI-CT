@@ -2,7 +2,7 @@
 import os
 import html
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
@@ -21,7 +21,7 @@ def draw_page_decorations(canvas, doc):
     canvas.setLineWidth(1)
     canvas.line(40, 55, 572, 55)
     
-    # 3. Keterangan teks footer
+    # 3. Keterangan teks footer dengan nomor halaman dinamis
     canvas.setFont('Helvetica-Bold', 8)
     canvas.setFillColor(colors.HexColor('#1E293B')) # Slate 800
     canvas.drawString(40, 38, "DETUJI-CT")
@@ -29,14 +29,18 @@ def draw_page_decorations(canvas, doc):
     canvas.setFont('Helvetica', 8)
     canvas.setFillColor(colors.HexColor('#64748B')) # Slate 500
     canvas.drawString(95, 38, "|   Sistem Analisis Citra Medis Ginjal berbasis Kecerdasan Buatan")
-    canvas.drawRightString(572, 38, "Halaman 1 dari 1")
+    canvas.drawRightString(572, 38, f"Halaman {doc.page}")
     
     canvas.restoreState()
 
 def generate_diagnosis_pdf(report_data, output_pdf_path):
     """
     Fungsi untuk merakit lembar hasil radiologi resmi ke dalam format PDF menggunakan ReportLab.
+    Halaman 1: Kop surat, identitas pasien, ringkasan mayoritas, disclaimer & tanda tangan.
+    Halaman 2+: Lampiran citra CT Scan dalam grid 2 kolom.
     """
+    from config import Config
+    
     # Proteksi karakter spesial XML agar tidak merusak parser Paragraph ReportLab
     nama_pasien = html.escape(str(report_data.get('nama_pasien', 'Anonim')))
     no_rm = html.escape(str(report_data.get('no_rm', '-')))
@@ -58,17 +62,14 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
     story = []
     
     # 2. Pengaturan Gaya Tulisan (Styles)
-    from reportlab.platypus import PageBreak
-    from config import Config
     styles = getSampleStyleSheet()
     
-    # Custom Styles
     title_style = ParagraphStyle(
         'HeaderTitle',
         parent=styles['Heading1'],
         fontName='Helvetica-Bold',
         fontSize=18,
-        textColor=colors.HexColor('#0F766E'), # Teal Medis Utama
+        textColor=colors.HexColor('#0F766E'),
         spaceAfter=2
     )
     
@@ -77,7 +78,7 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=8,
-        textColor=colors.HexColor('#0D9488'), # Light Teal
+        textColor=colors.HexColor('#0D9488'),
         spaceAfter=8
     )
 
@@ -105,7 +106,7 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
         parent=styles['Normal'],
         fontName='Helvetica',
         fontSize=9,
-        textColor=colors.HexColor('#334155'), # Slate 700
+        textColor=colors.HexColor('#334155'),
         leading=13
     )
 
@@ -116,7 +117,6 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
     )
 
     # ==================== KOP SURAT MODERN ====================
-    # Menggunakan tabel 2 kolom: Kiri nama app, Kanan info institusi
     header_left = [
         Paragraph("DETUJI-CT", title_style),
         Paragraph("INTELLIGENT MEDICAL IMAGING REPORT", subtitle_style)
@@ -136,28 +136,26 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
     story.append(header_table)
     story.append(Spacer(1, 10))
 
-    # ==================== TABEL IDENTITAS PASIEN (CARD STYLE) ====================
-    # Menggunakan background lembut dan aksen border kiri berwarna teal
+    # ==================== TABEL IDENTITAS PASIEN ====================
     patient_info_data = [
-        [Paragraph(f"<b>NAMA PASIEN</b>", body_bold_style), Paragraph(f": &nbsp; {nama_pasien}", body_style),
-         Paragraph(f"<b>NO. REKAM MEDIS</b>", body_bold_style), Paragraph(f": &nbsp; {no_rm}", body_style)],
-        [Paragraph(f"<b>TANGGAL ANALISIS</b>", body_bold_style), Paragraph(f": &nbsp; {timestamp}", body_style),
-         Paragraph(f"<b>ID TRANSAKSI</b>", body_bold_style), Paragraph(f": &nbsp; {analysis_id}", body_style)]
+        [Paragraph("<b>NAMA PASIEN</b>", body_bold_style), Paragraph(f": &nbsp; {nama_pasien}", body_style),
+         Paragraph("<b>NO. REKAM MEDIS</b>", body_bold_style), Paragraph(f": &nbsp; {no_rm}", body_style)],
+        [Paragraph("<b>TANGGAL ANALISIS</b>", body_bold_style), Paragraph(f": &nbsp; {timestamp}", body_style),
+         Paragraph("<b>ID TRANSAKSI</b>", body_bold_style), Paragraph(f": &nbsp; {analysis_id}", body_style)]
     ]
     
     info_table = Table(patient_info_data, colWidths=[120, 145, 120, 145])
     info_table.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F0FDFA')), # Light Teal background
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F0FDFA')),
         ('PADDING', (0,0), (-1,-1), 6),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        # Efek aksen garis tebal di sebelah kiri
         ('LINEBEFORE', (0,0), (0,-1), 4, colors.HexColor('#0F766E')),
         ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#CCFBF1')),
     ]))
     story.append(info_table)
-    story.append(Spacer(1, 12))
+    story.append(Spacer(1, 10))
 
-    # ==================== INTERPRETASI & DIAGNOSIS AI (ALERT BOX) ====================
+    # ==================== RINGKASAN HASIL ANALISIS (MAYORITAS) ====================
     story.append(Paragraph("RINGKASAN HASIL ANALISIS (MAYORITAS)", section_heading))
     
     is_tumor = "tumor" in prediction.lower()
@@ -180,7 +178,7 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
         'ResultDetail',
         parent=body_style,
         fontSize=8.5,
-        textColor=colors.HexColor('#475569') # Slate 600
+        textColor=colors.HexColor('#475569')
     )
     
     summary_text = html.escape(str(report_data.get('summary_text', f"Berdasarkan analisis {len(details)} gambar.")))
@@ -189,28 +187,52 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
         [Paragraph(f"<b>STATUS KESELURUHAN: &nbsp;{status_label}</b>", result_title_style)],
         [Paragraph(f"Rata-rata Tingkat Kepercayaan: &nbsp;<b>{confidence}%</b>", result_detail_style)],
         [Paragraph(f"{summary_text}", ParagraphStyle('ResultDesc', parent=result_detail_style, fontSize=9, spaceBefore=4))],
-        [Paragraph(f"<i>Klasifikasi dilakukan menggunakan arsitektur deep learning MobileNet v2 yang telah dioptimalkan untuk citra CT Scan Ginjal.</i>", ParagraphStyle('ResultInfo', parent=result_detail_style, fontSize=7.5, spaceBefore=6))]
+        [Paragraph("<i>Klasifikasi dilakukan menggunakan arsitektur deep learning MobileNet v2 yang telah dioptimalkan untuk citra CT Scan Ginjal.</i>", ParagraphStyle('ResultInfo', parent=result_detail_style, fontSize=7.5, spaceBefore=6))]
     ]
     
     result_table = Table(result_box_data, colWidths=[530])
     result_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), bg_color),
         ('PADDING', (0,0), (-1,-1), 10),
-        ('LINEBEFORE', (0,0), (0,-1), 4, border_color), # Garis aksen kiri
-        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')), # Border luar tipis
+        ('LINEBEFORE', (0,0), (0,-1), 4, border_color),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#E2E8F0')),
     ]))
     story.append(result_table)
-    story.append(Spacer(1, 20))
+    story.append(Spacer(1, 15))
+
+    # ==================== DISCLAIMER & TANDA TANGAN (HALAMAN 1) ====================
+    disclaimer_text = (
+        "<font size=7 color='#64748B'><b>DISCLAIMER MEDIS:</b><br/>"
+        "Laporan analisis ini dihasilkan secara otomatis oleh sistem kecerdasan buatan komputer (Detuji-CT). "
+        "Hasil ini bersifat sebagai diagnosis sementara untuk membantu skrining awal. Laporan ini <b>wajib</b> "
+        "ditinjau, dikonfirmasi, dan ditandatangani oleh Dokter Spesialis Radiologi sebelum digunakan sebagai "
+        "dasar keputusan klinis atau tindakan medis.</font>"
+    )
     
-    # Pindah halaman untuk lampiran jika gambar banyak
+    footer_data = [
+        [Paragraph(disclaimer_text, body_style),
+         Paragraph("<b>Dokter Spesialis Radiologi,</b><br/><br/><br/><br/>______________________<br/>NIP/SIP. ", ParagraphStyle('DocSign', parent=body_style, alignment=1))]
+    ]
+    
+    footer_table = Table(footer_data, colWidths=[350, 180])
+    footer_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('ALIGN', (1,0), (1,0), 'CENTER'),
+        ('LINEBEFORE', (1,0), (1,0), 0.5, colors.HexColor('#E2E8F0')),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(footer_table)
+
+    # ==================== HALAMAN 2+: LAMPIRAN CITRA CT SCAN (GRID 2 KOLOM) ====================
+    temp_files = []
+    
     if len(details) > 0:
         story.append(PageBreak())
-
-    # ==================== LAMPIRAN CITRA CT SCAN ====================
-    story.append(Paragraph("LAMPIRAN CITRA MEDIS YANG DIANALISIS", section_heading))
-    story.append(Spacer(1, 10))
+        story.append(Paragraph("LAMPIRAN CITRA MEDIS YANG DIANALISIS", section_heading))
+        story.append(Spacer(1, 6))
     
-    temp_files = []
+    # Siapkan semua cell gambar terlebih dahulu
+    image_cells = []
     
     for idx, detail in enumerate(details):
         img_filename = detail.get('saved_filename', '')
@@ -230,7 +252,6 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
                     ds = pydicom.dcmread(image_path)
                     img_array = ds.pixel_array
                     
-                    # Konversi ke uint8 skala 0-255
                     img_min = np.min(img_array)
                     img_max = np.max(img_array)
                     if img_max > img_min:
@@ -238,7 +259,6 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
                     else:
                         img_array = np.zeros_like(img_array, dtype=np.uint8)
                         
-                    # Konversi ke BGR untuk cv2.imwrite
                     if len(img_array.shape) == 2:
                         img_bgr = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
                     elif len(img_array.shape) == 3:
@@ -260,25 +280,25 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
                 except Exception as dcm_err:
                     print(f"Error converting DICOM to PNG for PDF: {dcm_err}")
                     
-            # Menampilkan gambar
-            scan_img = Image(image_path_to_use, width=150, height=150)
+            # Gambar
+            scan_img = Image(image_path_to_use, width=200, height=200)
             scan_img.hAlign = 'CENTER'
             
-            # Label
+            # Label warna
             img_is_tumor = "tumor" in img_prediction.lower()
             lbl_color = colors.HexColor('#BE123C') if img_is_tumor else colors.HexColor('#047857')
             
             lbl_style = ParagraphStyle(
-                'ImgLbl',
+                f'ImgLbl_{idx}',
                 parent=styles['Normal'],
                 fontName='Helvetica-Bold',
                 fontSize=9,
                 textColor=lbl_color,
-                alignment=1 # Center
+                alignment=1
             )
             
             desc_style = ParagraphStyle(
-                'ImgDesc',
+                f'ImgDesc_{idx}',
                 parent=styles['Normal'],
                 fontName='Helvetica',
                 fontSize=8,
@@ -289,43 +309,38 @@ def generate_diagnosis_pdf(report_data, output_pdf_path):
             img_label = Paragraph(f"{img_prediction.upper()} ({str(img_confidence).replace('.', ',')}%)", lbl_style)
             img_desc = Paragraph(f"File: {detail.get('original_filename', img_filename)}", desc_style)
             
-            image_table = Table([[scan_img], [img_label], [img_desc]], colWidths=[200], rowHeights=[160, 15, 15])
-            image_table.setStyle(TableStyle([
+            # Sub-tabel untuk 1 gambar (gambar + label + deskripsi)
+            cell_table = Table([[scan_img], [img_label], [img_desc]], colWidths=[220])
+            cell_table.setStyle(TableStyle([
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8FAFC')),
                 ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#E2E8F0')),
-                ('PADDING', (0,0), (-1,-1), 5),
+                ('PADDING', (0,0), (-1,-1), 8),
+                ('TOPPADDING', (0,1), (0,1), 6),
+                ('BOTTOMPADDING', (0,2), (0,2), 6),
             ]))
-            story.append(image_table)
-            story.append(Spacer(1, 15))
+            
+            image_cells.append(cell_table)
         except Exception as e:
-            story.append(Paragraph(f"<i>[Gagal memuat citra {img_filename}: {html.escape(str(e))}]</i>", body_style))
-            story.append(Spacer(1, 10))
-
-    # ==================== TANDA TANGAN / DISCLAIMER (FOOTER CARD) ====================
-    story.append(Spacer(1, 10))
-    disclaimer_text = (
-        "<font size=7 color='#64748B'><b>DISCLAIMER MEDIS:</b><br/>"
-        "Laporan analisis ini dihasilkan secara otomatis oleh sistem kecerdasan buatan komputer (Detuji-CT). "
-        "Hasil ini bersifat sebagai diagnosis sementara untuk membantu skrining awal. Laporan ini <b>wajib</b> "
-        "ditinjau, dikonfirmasi, dan ditandatangani oleh Dokter Spesialis Radiologi sebelum digunakan sebagai "
-        "dasar keputusan klinis atau tindakan medis.</font>"
-    )
+            error_para = Paragraph(f"<i>[Gagal memuat citra {img_filename}: {html.escape(str(e))}]</i>", body_style)
+            image_cells.append(error_para)
     
-    footer_data = [
-        [Paragraph(disclaimer_text, body_style),
-         Paragraph("<b>Dokter Spesialis Radiologi,</b><br/><br/><br/><br/>______________________<br/>NIP/SIP. ", ParagraphStyle('DocSign', parent=body_style, alignment=1))]
-    ]
-    
-    footer_table = Table(footer_data, colWidths=[350, 180])
-    footer_table.setStyle(TableStyle([
-        ('VALIGN', (0,0), (-1,-1), 'TOP'),
-        ('ALIGN', (1,0), (1,0), 'CENTER'),
-        ('LINEBEFORE', (1,0), (1,0), 0.5, colors.HexColor('#E2E8F0')), # Garis pemisah vertikal tipis
-        ('PADDING', (0,0), (-1,-1), 4),
-    ]))
-    story.append(footer_table)
+    # Susun image_cells ke dalam grid 2 kolom
+    for i in range(0, len(image_cells), 2):
+        if i + 1 < len(image_cells):
+            row = [[image_cells[i], image_cells[i+1]]]
+        else:
+            row = [[image_cells[i], ""]]
+        
+        grid_table = Table(row, colWidths=[265, 265])
+        grid_table.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ('PADDING', (0,0), (-1,-1), 5),
+        ]))
+        story.append(grid_table)
+        story.append(Spacer(1, 8))
 
     try:
         # 3. Cetak dokumen menjadi file PDF fisik dengan dekorasi halaman
